@@ -3,7 +3,13 @@
 
 #include <memory>
 
+#include "rdr/interaction.h"
+#include "rdr/math_aliases.h"
+#include "rdr/math_utils.h"
+#include "rdr/properties.h"
+#include "rdr/ray.h"
 #include "rdr/rdr.h"
+#include "rdr/std.h"
 
 RDR_NAMESPACE_BEGIN
 
@@ -66,6 +72,32 @@ public:
 private:
   Vec3f center;
   Float radius;
+};
+
+
+class Rectangle final: public Shape {
+public:
+  ~Rectangle() override = default;
+
+  Rectangle(const Properties &props);
+
+  bool intersect(Ray &ray, SurfaceInteraction &interaction) const override;
+
+  Float area() const override;
+
+  SurfaceInteraction sample(Sampler &sampler) const override;
+
+  AABB getBound() const override;
+
+  Float pdf(const SurfaceInteraction &interaction) const override;
+
+private:
+  Vec3f center;
+  Vec3f edge1;
+  Vec3f edge2;
+  Vec3f normal;
+  Float area_value;
+
 };
 
 /**
@@ -132,6 +164,7 @@ protected:
 };
 
 RDR_REGISTER_CLASS(Sphere)
+RDR_REGISTER_CLASS(Rectangle)
 RDR_REGISTER_CLASS(TriangleMesh)
 
 RDR_REGISTER_FACTORY(Shape, [](const Properties &props) -> Shape * {
@@ -140,6 +173,8 @@ RDR_REGISTER_FACTORY(Shape, [](const Properties &props) -> Shape * {
     return Memory::alloc<TriangleMesh>(props);
   } else if (type == "sphere") {
     return Memory::alloc<Sphere>(props);
+  } else if (type == "rectangle"){
+    return Memory::alloc<Rectangle>(props);
   } else {
     Exception_("Shape type {} not supported", type);
   }

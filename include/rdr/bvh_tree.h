@@ -223,32 +223,29 @@ use_surface_area_heuristic:
         buckets[b].bounds.unionWith(nodes[i].getAABB());
     }
     
-    // 2. 计算每个可能分割点的成本
     Float costs[NUM_BUCKETS - 1];
     for (int i = 0; i < NUM_BUCKETS - 1; ++i) {
         AABB b0, b1;
         int count0 = 0, count1 = 0;
         
-        // 左侧：[0, i]
+        // [0, i]
         for (int j = 0; j <= i; ++j) {
             b0.unionWith(buckets[j].bounds);
             count0 += buckets[j].count;
         }
         
-        // 右侧：[i+1, NUM_BUCKETS-1]
+        // [i+1, NUM_BUCKETS-1]
         for (int j = i + 1; j < NUM_BUCKETS; ++j) {
             b1.unionWith(buckets[j].bounds);
             count1 += buckets[j].count;
         }
         
-        // SAH 成本计算
-        costs[i] = 0.125f +  // 遍历成本
+        costs[i] = 0.125f +  
                    (count0 * b0.getSurfaceArea() + 
                     count1 * b1.getSurfaceArea()) / 
                    prebuilt_aabb.getSurfaceArea();
     }
     
-    // 3. 找到最小成本的分割
     Float minCost = costs[0];
     int minCostSplitBucket = 0;
     for (int i = 1; i < NUM_BUCKETS - 1; ++i) {
@@ -259,7 +256,7 @@ use_surface_area_heuristic:
     }
     Float leafCost = count;
     if (count > 1 && minCost < leafCost) {
-        // 使用SAH分割
+        // SAH
         auto mid = std::partition(
             nodes.begin() + span_left,
             nodes.begin() + span_right,
@@ -274,7 +271,6 @@ use_surface_area_heuristic:
         );
         split = mid - nodes.begin();
     } else {
-        // SAH建议创建叶子节点或回退到中位数
         goto use_median_heuristic;
     }
 }

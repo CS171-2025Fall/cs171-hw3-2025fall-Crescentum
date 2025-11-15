@@ -8,6 +8,8 @@
 #include "rdr/canary.h"
 #include "rdr/interaction.h"
 #include "rdr/load_obj.h"
+#include "rdr/math_aliases.h"
+#include "rdr/properties.h"
 #include "rdr/ray.h"
 
 RDR_NAMESPACE_BEGIN
@@ -180,7 +182,97 @@ AABB Sphere::getBound() const {
 Float Sphere::pdf(const SurfaceInteraction &interaction) const {
   return 1.0 / area();
 }
+/* ===================================================================== *
+ *
+ * Rectangle Implementation
+ *
+ * ===================================================================== */
 
+Rectangle::Rectangle(const Properties &props):Shape(props), 
+    center(props.getProperty<Vec3f>("center",Vec3f(0,0,0))),
+    edge1(props.getProperty<Vec3f>("edge1", Vec3f(1,0,0))),
+    edge2(props.getProperty<Vec3f>("edge2",Vec3f(0,1,0))){
+  normal = Normalize(Cross(edge1, edge2));
+  area_value = Norm(Cross(edge1, edge2));
+  
+  // Verify that edges are not degenerate
+  if (area_value < EPS) {
+    Exception_("Rectangle has degenerate edges (area too small)");
+  }
+}
+
+bool Rectangle::intersect(Ray &ray, SurfaceInteraction & interaction) const {
+
+  Float denom = Dot(normal,ray.direction);
+  if(std::abs(denom) < EPS) return false;
+
+  Float t =Dot(normal, center - ray.origin)/denom;
+  if(!ray.withinTimeRange(t)) return false;
+
+  Vec3f p = ray(t);
+
+  Vec3f v = p - center;
+  Float u = Dot(v, edge1) / SquareNorm(edge1);
+  Float v_coordinate = Dot(v, edge2) / SquareNorm(edge2);
+
+  if (u < -0.5f || u > 0.5f || v_coordinate < -0.5f || v_coordinate > 0.5f) {
+    return false;
+  }
+  
+  // We have a valid intersection
+  // Map u, v from [-0.5, 0.5] to [0, 1] for UV coordinates
+  Vec2f uv(u + 0.5f, v_coordinate + 0.5f);
+  
+  // Compute differentials
+  Vec3f dpdu = edge1;
+  Vec3f dpdv = edge2;
+  
+  // Set the interaction
+  interaction.setDifferential(
+      p, denom > 0 ? normal : -normal,  // Flip normal if hitting from back
+      uv, dpdu, dpdv, Vec3f(0, 0 ,0), Vec3f(0, 0 ,0));
+  
+  ray.setTimeMax(t);
+  return true;
+}
+
+Float Rectangle::area() const {
+  return area_value;
+}
+
+SurfaceInteraction Rectangle::sample(Sampler &sampler) const{
+  Vec2f sample = sampler.get2D();
+
+  Float u = sample.x - 0.5f;
+  Float v = sample.y - 0.5f;
+
+  Vec3f p = center + u * edge1 + v * edge2;
+
+  SurfaceInteraction interaction{};
+  interaction.setGeneral(p, normal);
+  interaction.setUV(sample);
+  interaction.setPdf(1.0f/ area(), EMeasure::EArea);
+
+  return interaction;
+}
+
+AABB Rectangle::getBound() const {
+  // Compute the four corners of the rectangle
+  Vec3f corner1 = center - 0.5f * edge1 - 0.5f* edge2;
+  Vec3f corner2 = center + 0.5f * edge1 - 0.5f * edge2;
+  Vec3f corner3 = center - 0.5f * edge1 + 0.5f * edge2;
+  Vec3f corner4 = center + 0.5f * edge1 + 0.5f * edge2;
+  
+  // Find min and max coordinates
+  Vec3f min_bound = Min(Min(corner1, corner2), Min(corner3, corner4));
+  Vec3f max_bound = Max(Max(corner1, corner2), Max(corner3, corner4));
+  
+  return AABB(min_bound - EPS, max_bound + EPS);
+}
+
+Float Rectangle::pdf(const SurfaceInteraction &interaction) const {
+  return 1.0f / area();
+}
 TriangleMesh::TriangleMesh(const Properties &props)
     : Shape(props), mesh(make_ref<TriangleMeshResource>()) {
   auto path = props.getProperty<std::string>("path");

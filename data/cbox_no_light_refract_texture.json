@@ -29,23 +29,31 @@
       "type": "constant",
       "color": [0.63, 0.065, 0.05]
     },
-    "floor_checker": {
-      "type": "checkerboard",
-      "color0": [0.8, 0.8, 0.8],
-      "color1": [0.3, 0.3, 0.3],
+    "wood_floor": {
+      "type": "image",
+      "path": "assets/texture/1.exr",
       "tex_coordinate_generator": {
         "type": "uvmapping2d",
-        "scale": [8.0, 8.0],
+        "scale": [2.0, 2.0],
         "delta": [0.0, 0.0]
       }
     },
-    "box_checker": {
+    "grid_texture": {
       "type": "checkerboard",
-      "color0": [0.7, 0.7, 0.7],
-      "color1": [0.5, 0.5, 0.5],
+      "color0": [1.0, 1.0, 1.0],
+      "color1": [0.0, 0.0, 0.0],
       "tex_coordinate_generator": {
         "type": "uvmapping2d",
         "scale": [4.0, 4.0],
+        "delta": [0.0, 0.0]
+      }
+    },
+    "wall_texture": {
+      "type": "image",
+      "path": "assets/texture/2.exr",
+      "tex_coordinate_generator": {
+        "type": "uvmapping2d",
+        "scale": [2.0, 2.0],
         "delta": [0.0, 0.0]
       }
     }
@@ -67,30 +75,34 @@
       "type": "refraction",
       "eta": 2.0
     },
-    "checker_floor": {
+    "wood_diffuse": {
       "type": "diffuse",
-      "texture_name": "floor_checker"
+      "texture_name": "wood_floor"
     },
-    "checker_box": {
+    "grid_diffuse": {
       "type": "diffuse",
-      "texture_name": "box_checker"
+      "texture_name": "grid_texture"
+    },
+    "wall_diffuse": {
+      "type": "diffuse",
+      "texture_name": "wall_texture"
     }
   },
   "objects": [
     {
       "type": "mesh",
       "path": "assets/cbox/left.obj",
-      "material_name": "red_diffuse"
+      "material_name": "wall_diffuse"
     },
     {
       "type": "mesh",
       "path": "assets/cbox/right.obj",
-      "material_name": "green_diffuse"
+      "material_name": "wall_diffuse"
     },
     {
       "type": "mesh",
       "path": "assets/cbox/floor.obj",
-      "material_name": "checker_floor"
+      "material_name": "wood_diffuse"
     },
     {
       "type": "mesh",
@@ -100,18 +112,18 @@
     {
       "type": "mesh",
       "path": "assets/cbox/back.obj",
-      "material_name": "grey_diffuse"
+      "material_name": "wall_diffuse"
     },
     {
       "type": "mesh",
       "path": "assets/cbox/short_box.obj",
-      "material_name": "checker_box",
+      "material_name": "grid_diffuse",
       "translate": [-0.7, 0, 0.6]
     },
     {
       "type": "mesh",
       "path": "assets/cbox/tall_box.obj",
-      "material_name": "checker_box",
+      "material_name": "grid_diffuse",
       "translate": [0.7, 0, -0.5]
     },
     {
