@@ -1,13 +1,13 @@
-# Assignment 4: Global Illumination
+# Assignment 3: Basic Ray Tracing
 
-Name:  
-Student ID:  
+Name: Yang Yexuan 
+Student ID: 2023533149 
 
 **Please write your Chinese name and your student ID in this README.**
 
 ## Deadline
 
-**November 30, 2022, 22:00 UTC+8**
+**November 21, 2025, 22:00 UTC+8**
 
 ## Statement
 

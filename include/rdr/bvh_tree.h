@@ -5,6 +5,7 @@
 #ifndef __BVH_TREE_H__
 #define __BVH_TREE_H__
 
+#include <algorithm>
 #include "rdr/accel.h"
 #include "rdr/platform.h"
 #include "rdr/primitive.h"
@@ -143,7 +144,7 @@ typename BVHTree<_>::IndexType BVHTree<_>::build(
   // @see span_left: The left index of the current span
   // @see span_right: The right index of the current span
   //
-  /* if ( */ UNIMPLEMENTED; /* ) */
+  if (depth >= CUTOFF_DEPTH || span_left - span_right <= 1) 
   {
     // create leaf node
     const auto &node = nodes[span_left];
@@ -179,9 +180,13 @@ use_median_heuristic:
     // their centroid's `dim`-th dimension, such that all nodes in
     // [span_left, split) are less than those in [split, span_right)
     //
-    // You may find `std::nth_element` useful here.
-
-    UNIMPLEMENTED;
+    // You may find `std::nth_element` useful here
+    std::nth_element(nodes.begin() + span_left, nodes.begin() + split, nodes.begin() + span_right,
+    [dim](const NodeType &a, const NodeType &b){
+    return a.getAABB().getCenter()[dim] < b.getAABB().getCenter()[dim];
+  }
+);
+    
 
     // clang-format on
   } else if (hprofile == EHeuristicProfile::ESurfaceAreaHeuristic) {
@@ -199,8 +204,80 @@ use_surface_area_heuristic:
     //
     // You can then set @see BVHTree::hprofile to ESurfaceAreaHeuristic to
     // enable this feature.
-    UNIMPLEMENTED;
-  }
+    const int NUM_BUCKETS = 12;
+
+    struct BucketInfo {
+      int count = 0;
+      AABB bounds;
+    };
+
+    BucketInfo buckets[NUM_BUCKETS];
+
+    for (IndexType i = span_left; i < span_right; ++i) {
+        Float centroid = nodes[i].getAABB().getCenter()[dim];
+        Float extent = prebuilt_aabb.getExtent()[dim];
+        int b = NUM_BUCKETS * 
+                ((centroid - prebuilt_aabb.low_bnd[dim]) / extent);
+        if (b == NUM_BUCKETS) b = NUM_BUCKETS - 1;
+        buckets[b].count++;
+        buckets[b].bounds.unionWith(nodes[i].getAABB());
+    }
+    
+    // 2. 计算每个可能分割点的成本
+    Float costs[NUM_BUCKETS - 1];
+    for (int i = 0; i < NUM_BUCKETS - 1; ++i) {
+        AABB b0, b1;
+        int count0 = 0, count1 = 0;
+        
+        // 左侧：[0, i]
+        for (int j = 0; j <= i; ++j) {
+            b0.unionWith(buckets[j].bounds);
+            count0 += buckets[j].count;
+        }
+        
+        // 右侧：[i+1, NUM_BUCKETS-1]
+        for (int j = i + 1; j < NUM_BUCKETS; ++j) {
+            b1.unionWith(buckets[j].bounds);
+            count1 += buckets[j].count;
+        }
+        
+        // SAH 成本计算
+        costs[i] = 0.125f +  // 遍历成本
+                   (count0 * b0.getSurfaceArea() + 
+                    count1 * b1.getSurfaceArea()) / 
+                   prebuilt_aabb.getSurfaceArea();
+    }
+    
+    // 3. 找到最小成本的分割
+    Float minCost = costs[0];
+    int minCostSplitBucket = 0;
+    for (int i = 1; i < NUM_BUCKETS - 1; ++i) {
+        if (costs[i] < minCost) {
+            minCost = minCostSplitBucket;
+            minCostSplitBucket = i;
+        }
+    }
+    Float leafCost = count;
+    if (count > 1 && minCost < leafCost) {
+        // 使用SAH分割
+        auto mid = std::partition(
+            nodes.begin() + span_left,
+            nodes.begin() + span_right,
+            [=](const NodeType &node) {
+                Float centroid = node.getAABB().getCenter()[dim];
+                Float extent = prebuilt_aabb.getExtent()[dim];
+                int b = NUM_BUCKETS * 
+                        ((centroid - prebuilt_aabb.low_bnd[dim]) / extent);
+                if (b == NUM_BUCKETS) b = NUM_BUCKETS - 1;
+                return b <= minCostSplitBucket;
+            }
+        );
+        split = mid - nodes.begin();
+    } else {
+        // SAH建议创建叶子节点或回退到中位数
+        goto use_median_heuristic;
+    }
+}
 
   // Build the left and right subtree
   result.left_index  = build(depth + 1, span_left, split);

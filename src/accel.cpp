@@ -30,20 +30,37 @@ bool AABB::isOverlap(const AABB &other) const {
 }
 
 bool AABB::intersect(const Ray &ray, Float *t_in, Float *t_out) const {
-  // TODO(HW3): implement ray intersection with AABB.
-  // ray distance for two intersection points are returned by pointers.
-  //
-  // This method should modify t_in and t_out as the "time"
-  // when the ray enters and exits the AABB respectively.
-  //
-  // And return true if there is an intersection, false otherwise.
-  //
-  // Useful Functions:
-  // @see Ray::safe_inverse_direction
-  //    for getting the inverse direction of the ray.
-  // @see Min/Max/ReduceMin/ReduceMax
-  //    for vector min/max operations.
-  UNIMPLEMENTED;
+  // Algorithm:
+  // 1. For each axis, compute t values where ray intersects the two planes
+  // 2. t_near = max(all entering times)
+  // 3. t_far = min(all exiting times)
+  // 4. Intersection exists if t_near <= t_far and t_far >= 0
+  
+  // Get the inverse direction for efficiency
+  // safe_inverse_direction handles division by zero (parallel to axis)
+  Vec3f inv_dir = ray.safe_inverse_direction;
+  
+  Vec3f t0 = (low_bnd - ray.origin) * inv_dir;    // Intersection with lower bound planes
+  Vec3f t1 = (upper_bnd - ray.origin) * inv_dir;  // Intersection with upper bound planes
+  
+  Vec3f t_min = Min(t0, t1);  // Entry times for each axis
+  Vec3f t_max = Max(t0, t1);  // Exit times for each axis
+  
+  Float t_near = ReduceMax(t_min);
+  Float t_far = ReduceMin(t_max);
+  
+  // Check if there's a valid intersection
+  // The ray intersects the AABB if:
+  // 1. t_near <= t_far (the entry time is before the exit time)
+  // 2. t_far >= 0 (the intersection is in front of the ray origin)
+  if (t_near > t_far || t_far < 0) {
+    return false;  // No intersection
+  }
+  
+  *t_in = t_near;
+  *t_out = t_far;
+  
+  return true;
 }
 
 /* ===================================================================== *
@@ -71,31 +88,71 @@ bool TriangleIntersect(Ray &ray, const uint32_t &triangle_index,
   InternalVecType v1  = Cast<InternalScalarType>(vertices[v_idx[1]]);
   InternalVecType v2  = Cast<InternalScalarType>(vertices[v_idx[2]]);
 
-  // TODO(HW3): implement ray-triangle intersection test.
-  // You should compute the u, v, t as InternalScalarType
+  // ========================================================================
+  // Möller-Trumbore algorithm for ray-triangle intersection
+  // ========================================================================
+  // Based on the equation: O + tD = (1-u-v)V0 + uV1 + vV2
+  // Rearranged as: tD = -T + uE1 + vE2, where:
+  //   E1 = V1 - V0 (edge 1)
+  //   E2 = V2 - V0 (edge 2)
+  //   T = O - V0 (vector from V0 to ray origin)
   //
-  //   InternalScalarType u = ...;
-  //   InternalScalarType v = ...;
-  //   InternalScalarType t = ...;
-  //
-  // And exit early with `return false` if there is no intersection.
-  //
-  // The intersection points is denoted as:
-  // (1 - u - v) * v0 + u * v1 + v * v2 == ray.origin + t * ray.direction
-  // where the left side is the barycentric interpolation of the triangle
-  // vertices, and the right side is the parametric equation of the ray.
-  //
-  // You should also make sure that:
-  // u >= 0, v >= 0, u + v <= 1, and, ray.t_min <= t <= ray.t_max
-  //
-  // Useful Functions:
-  // You can use @see Cross and @see Dot for determinant calculations.
+  // Using Cramer's rule to solve the linear system:
+  // [-D, E1, E2] * [t, u, v]^T = T
+  
+  InternalVecType origin = Cast<InternalScalarType>(ray.origin);
+  
+  // Compute edge vectors
+  InternalVecType edge1 = v1 - v0;
+  InternalVecType edge2 = v2 - v0;
+  
+  // Compute determinant using triple product: det = D · (E2 × E1)
+  // pvec = D × E2
+  InternalVecType pvec = Cross(dir, edge2);
+  InternalScalarType det = Dot(edge1, pvec);
+  
+  // Check if ray is parallel to triangle (det ≈ 0)
+  // Using a small epsilon for numerical stability
+  constexpr InternalScalarType epsilon = InternalScalarType(1e-8);
+  if (std::abs(det) < epsilon) {
+    return false;  // Ray is parallel to triangle
+  }
+  
+  // Compute inverse determinant for efficiency
+  InternalScalarType inv_det = InternalScalarType(1) / det;
+  
+  // Compute vector from V0 to ray origin
+  InternalVecType tvec = origin - v0;
+  
+  // Calculate u parameter using Cramer's rule: u = (T · pvec) / det
+  // This tests if the intersection point is on the correct side of edge V0-V2
+  InternalScalarType u = Dot(tvec, pvec) * inv_det;
+  
 
-  // Delete the following lines after you implement the function
-  InternalScalarType u = InternalScalarType(0);
-  InternalScalarType v = InternalScalarType(0);
-  InternalScalarType t = InternalScalarType(0);
-  UNIMPLEMENTED;
+  if (u < InternalScalarType(0) || u > InternalScalarType(1)) {
+    return false;
+  }
+  
+  // Calculate qvec = T × E1
+  InternalVecType qvec = Cross(tvec, edge1);
+  
+  // Calculate v parameter using Cramer's rule: v = (D · qvec) / det
+  // This tests if the intersection point is on the correct side of edge V0-V1
+  InternalScalarType v = Dot(dir, qvec) * inv_det;
+  
+  // Test v bounds and u+v constraint: v >= 0 and u+v <= 1
+  // This ensures the point is inside the triangle
+  if (v < InternalScalarType(0) || u + v > InternalScalarType(1)) {
+    return false;
+  }
+  
+  // Calculate t parameter using Cramer's rule: t = (E2 · qvec) / det
+  // This gives the distance along the ray to the intersection point
+  InternalScalarType t = Dot(edge2, qvec) * inv_det;
+  
+  if (t < static_cast<InternalScalarType>(ray.t_min) || t > static_cast<InternalScalarType>(ray.t_max)) {
+    return false;
+  }
 
   // We will reach here if there is an intersection
 
