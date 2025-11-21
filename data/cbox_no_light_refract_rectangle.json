@@ -2,7 +2,7 @@
   "integrator": {
     "type": "intersection_test",
     "max_depth": 16,
-    "spp": 32
+    "spp": 64
   },
   "film": {
     "resolution": [
