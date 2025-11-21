@@ -49,9 +49,7 @@ compile_commands.json
 .zed/
 
 # mitsuba
-*.exr
 *.svg
-*.png
 *.mip
 *.log
 *.data
